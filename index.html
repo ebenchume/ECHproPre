@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ECHpro – Contabilidade e Gestão de RH Integrada</title>
+    <meta name="description" content="Sistema integrado de contabilidade e recursos humanos com automação de folha de pagamento, gestão de férias e benefícios, conformidade eSocial, integração bancária em tempo real, relatórios fiscais e auditoria." />
+    <meta property="og:title" content="ECHpro – Contabilidade e Gestão de RH Integrada" />
+    <meta property="og:description" content="Sistema integrado de contabilidade e recursos humanos com automação de folha de pagamento, gestão de férias e benefícios, conformidade eSocial, integração bancária em tempo real, relatórios fiscais e auditoria." />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#b91c1c" />
+    <link rel="manifest" href="/manifest.json" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

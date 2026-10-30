@@ -1,0 +1,6 @@
+{
+  "name": "ECHpro – Contabilidade e Gestão de RH Integrada",
+  "description": "Sistema integrado de contabilidade e recursos humanos com automação de folha de pagamento, gestão de férias e benefícios, conformidade eSocial, integração bancária em tempo real, relatórios fiscais e auditoria.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
