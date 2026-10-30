@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { AppProvider } from './context/AppContext';
+import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -19,24 +19,29 @@ import { SuporteChatView } from './components/SuporteChatView';
 import { TwoFactorModal } from './components/TwoFactorModal';
 import { AtivacaoLicencaModal } from './components/AtivacaoLicencaModal';
 import { InstaladorWindowsModal } from './components/InstaladorWindowsModal';
+import { LoginModal } from './components/LoginModal';
 import {
   LayoutDashboard,
   Calculator,
   Users,
   Landmark,
   Headphones,
+  UserCheck,
+  ShieldAlert,
 } from 'lucide-react';
 
 function AppContent() {
+  const { estaAutenticado, usuarioAtual } = useApp();
   const [currentSection, setCurrentSection] = useState<string>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [is2FAModalOpen, setIs2FAModalOpen] = useState(false);
   const [isLicencaModalOpen, setIsLicencaModalOpen] = useState(false);
   const [isWindowsModalOpen, setIsWindowsModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isNovoLancamentoOpen, setIsNovoLancamentoOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-red-600 selection:text-white">
+    <div className="min-h-screen bg-slate-100 text-blue-950 flex flex-col font-sans selection:bg-red-600 selection:text-white">
       {/* Header Fixo no Topo */}
       <Header
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -44,6 +49,7 @@ function AppContent() {
         onOpen2FAModal={() => setIs2FAModalOpen(true)}
         onOpenLicencaModal={() => setIsLicencaModalOpen(true)}
         onOpenWindowsModal={() => setIsWindowsModalOpen(true)}
+        onOpenLoginModal={() => setIsLoginModalOpen(true)}
       />
 
       {/* Layout Principal: Sidebar + Conteúdo */}
@@ -55,6 +61,7 @@ function AppContent() {
           onClose={() => setIsSidebarOpen(false)}
           onOpenLicencaModal={() => setIsLicencaModalOpen(true)}
           onOpenWindowsModal={() => setIsWindowsModalOpen(true)}
+          onOpenLoginModal={() => setIsLoginModalOpen(true)}
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full pb-20 lg:pb-8">
@@ -160,6 +167,13 @@ function AppContent() {
       <InstaladorWindowsModal
         isOpen={isWindowsModalOpen}
         onClose={() => setIsWindowsModalOpen(false)}
+      />
+
+      {/* Modal de Login & Troca de Utilizador (Multi-Contas) */}
+      <LoginModal
+        isOpen={isLoginModalOpen || !estaAutenticado}
+        onClose={() => setIsLoginModalOpen(false)}
+        isBloqueado={!estaAutenticado}
       />
     </div>
   );

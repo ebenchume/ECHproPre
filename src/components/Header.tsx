@@ -15,6 +15,9 @@ import {
   KeyRound,
   Laptop,
   Database,
+  ChevronDown,
+  LogOut,
+  User,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -23,6 +26,7 @@ interface HeaderProps {
   onOpen2FAModal: () => void;
   onOpenLicencaModal?: () => void;
   onOpenWindowsModal?: () => void;
+  onOpenLoginModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpen2FAModal,
   onOpenLicencaModal,
   onOpenWindowsModal,
+  onOpenLoginModal,
 }) => {
   const {
     empresa,
@@ -39,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
     marcarTodasNotificacoesLidas,
     doisFatoresAtivo,
     usuarioAtual,
+    terminarSessao,
     licenca,
     configBackupAuto,
   } = useApp();
@@ -271,23 +277,51 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Perfil do Usuário */}
-            <div className="flex items-center gap-2 pl-2 border-l border-red-600">
-              <div className="w-8 h-8 rounded-full bg-white text-red-700 flex items-center justify-center font-black text-xs shadow-xs ring-2 ring-red-800">
-                {usuarioAtual.nome
-                  .split(' ')
-                  .map(n => n[0])
-                  .slice(0, 2)
-                  .join('')}
-              </div>
-              <div className="hidden xl:block text-left">
-                <p className="text-xs font-semibold text-white leading-none truncate max-w-[130px]">
-                  {usuarioAtual.nome}
-                </p>
-                <p className="text-[10px] text-red-200 mt-0.5 truncate max-w-[130px]">
-                  {usuarioAtual.cargo}
-                </p>
-              </div>
+            {/* Perfil do Usuário & Alternador de Contas */}
+            <div className="flex items-center gap-1.5 pl-2 border-l border-red-600">
+              <button
+                onClick={onOpenLoginModal}
+                className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-xl bg-red-800/80 hover:bg-red-800 border border-red-600/80 text-white transition-all shadow-xs cursor-pointer group"
+                title={`Utilizador: ${usuarioAtual.nome} (${usuarioAtual.cargo}) - Clique para alternar conta ou fazer login`}
+              >
+                <div className={`w-8 h-8 rounded-xl ${usuarioAtual.avatarCor || 'bg-white text-red-700'} flex items-center justify-center font-black text-xs shadow-xs ring-2 ring-red-800 text-white flex-shrink-0`}>
+                  {usuarioAtual.nome
+                    .split(' ')
+                    .map(n => n[0])
+                    .slice(0, 2)
+                    .join('')}
+                </div>
+                <div className="hidden xl:block text-left">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-white leading-none truncate max-w-[130px]">
+                      {usuarioAtual.nome}
+                    </p>
+                    <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-white text-red-700 font-extrabold shadow-2xs">
+                      {usuarioAtual.perfil === 'administrador'
+                        ? 'Admin'
+                        : usuarioAtual.perfil === 'gerente_financeiro'
+                        ? 'Gerente Fin.'
+                        : usuarioAtual.perfil === 'gerente_rh'
+                        ? 'Gerente RH'
+                        : usuarioAtual.perfil === 'auditor'
+                        ? 'Auditor'
+                        : 'Colaborador'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-red-200 mt-0.5 truncate max-w-[130px]">
+                    {usuarioAtual.cargo}
+                  </p>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-red-200 group-hover:text-white transition-transform" />
+              </button>
+
+              <button
+                onClick={terminarSessao}
+                className="p-1.5 rounded-lg text-red-200 hover:text-white hover:bg-red-800 transition-colors cursor-pointer"
+                title="Bloquear Ecrã / Terminar Sessão"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>

@@ -19,6 +19,7 @@ import {
   ConfiguracaoBackupAuto,
   OrcamentoDepartamento,
   LicencaInfo,
+  ContaUsuario,
 } from '../types';
 import {
   initialEmpresa,
@@ -37,6 +38,7 @@ import {
   initialOrcamentos,
   initialLicenca,
   initialConfigBackupAuto,
+  initialContasUsuarios,
 } from '../data/seedData';
 
 // Função auxiliar simples para hash de integridade (SHA-256 hex)
@@ -165,14 +167,15 @@ export interface AppContextType {
   marcarTodasNotificacoesLidas: () => void;
   adicionarNotificacao: (notif: Omit<NotificacaoAlerta, 'id' | 'data' | 'lida'>) => void;
 
-  // Sessão & Usuário
-  usuarioAtual: {
-    nome: string;
-    cargo: string;
-    email: string;
-    doisFatoresVerificado: boolean;
-  };
+  // Sessão & Contas de Utilizadores (Administrador, Gerente Financeiro, Gerente de RH, Funcionário, Auditor)
+  contasUsuarios: ContaUsuario[];
+  usuarioAtual: ContaUsuario;
+  estaAutenticado: boolean;
   setDoisFatoresVerificado: (v: boolean) => void;
+  fazerLogin: (emailOuId: string, senha?: string) => { sucesso: boolean; mensagem: string };
+  trocarUsuarioRapido: (idUsuario: string) => void;
+  terminarSessao: () => void;
+  adicionarContaUsuario: (nova: Omit<ContaUsuario, 'id'>) => void;
 
   // Licença & Chave de Ativação (Windows 10/11 & Web)
   licenca: LicencaInfo;
@@ -273,11 +276,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     'AES256-GCM-ECH-KEY-9988220011-SHA256'
   );
 
-  const [usuarioAtual, setUsuarioAtual] = useState({
-    nome: 'Carlos Alberto Mondlane',
-    cargo: 'Diretor Financeiro & Contabilista Chefe',
-    email: 'carlos.mondlane@echpro.co.mz',
-    doisFatoresVerificado: true,
+  const [contasUsuarios, setContasUsuarios] = useState<ContaUsuario[]>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY}_contas_usuarios`);
+    return saved ? JSON.parse(saved) : initialContasUsuarios;
+  });
+
+  const [usuarioAtual, setUsuarioAtual] = useState<ContaUsuario>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY}_usuario_atual`);
+    if (saved) {
+      try {
+        const u = JSON.parse(saved);
+        if (u && u.id && u.nome) return u;
+      } catch (e) {}
+    }
+    return initialContasUsuarios[0]; // Padrão: Eng. E. Benchume (Administrador)
+  });
+
+  const [estaAutenticado, setEstaAutenticado] = useState<boolean>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY}_autenticado`);
+    return saved !== null ? JSON.parse(saved) : true;
   });
 
   // Salvar no localStorage quando o estado mudar
@@ -299,6 +316,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(`${STORAGE_KEY}_orcamentos`, JSON.stringify(orcamentos));
       localStorage.setItem(`${STORAGE_KEY}_2fa`, JSON.stringify(doisFatoresAtivo));
       localStorage.setItem(`${STORAGE_KEY}_licenca`, JSON.stringify(licenca));
+      localStorage.setItem(`${STORAGE_KEY}_contas_usuarios`, JSON.stringify(contasUsuarios));
+      localStorage.setItem(`${STORAGE_KEY}_usuario_atual`, JSON.stringify(usuarioAtual));
+      localStorage.setItem(`${STORAGE_KEY}_autenticado`, JSON.stringify(estaAutenticado));
     } catch (e) {
       console.warn('Erro ao salvar no localStorage:', e);
     }
@@ -319,6 +339,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     orcamentos,
     doisFatoresAtivo,
     licenca,
+    contasUsuarios,
+    usuarioAtual,
+    estaAutenticado,
   ]);
 
   const registrarAuditoria = async (
@@ -1669,6 +1692,97 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return chave;
   };
 
+  // Gestão de Contas de Utilizador & Autenticação (Multi-Perfis)
+  const fazerLogin = (emailOuId: string, senha?: string) => {
+    const query = emailOuId.trim().toLowerCase();
+    const conta = contasUsuarios.find(
+      c => c.email.toLowerCase() === query || c.id.toLowerCase() === query || c.nome.toLowerCase().includes(query)
+    );
+
+    if (!conta) {
+      return { sucesso: false, mensagem: 'Utilizador não encontrado. Verifique o email ou ID informado.' };
+    }
+
+    if (senha && senha.trim() && conta.senhaPredefinida && senha.trim() !== conta.senhaPredefinida) {
+      return { sucesso: false, mensagem: 'Senha incorreta para esta conta.' };
+    }
+
+    const agora = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const contaAtualizada: ContaUsuario = {
+      ...conta,
+      doisFatoresVerificado: true,
+      ultimoAcesso: agora,
+    };
+
+    setUsuarioAtual(contaAtualizada);
+    setEstaAutenticado(true);
+    setContasUsuarios(prev => prev.map(c => c.id === conta.id ? contaAtualizada : c));
+
+    registrarAuditoria(
+      'Segurança',
+      'Início de Sessão',
+      `Utilizador ${conta.nome} (${conta.cargo} - Perfil: ${conta.perfil.toUpperCase()}) autenticou-se no sistema.`
+    );
+
+    adicionarNotificacao({
+      titulo: `Sessão Iniciada: ${conta.nome}`,
+      mensagem: `Acedendo como ${conta.cargo} [${conta.departamento}].`,
+      tipo: 'sucesso',
+    });
+
+    return { sucesso: true, mensagem: `Bem-vindo ao ECHpro ERP, ${conta.nome}!` };
+  };
+
+  const trocarUsuarioRapido = (idUsuario: string) => {
+    const conta = contasUsuarios.find(c => c.id === idUsuario);
+    if (!conta) return;
+
+    const agora = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const contaAtualizada: ContaUsuario = {
+      ...conta,
+      doisFatoresVerificado: true,
+      ultimoAcesso: agora,
+    };
+
+    setUsuarioAtual(contaAtualizada);
+    setEstaAutenticado(true);
+    setContasUsuarios(prev => prev.map(c => c.id === conta.id ? contaAtualizada : c));
+
+    registrarAuditoria(
+      'Segurança',
+      'Troca Rápida de Perfil',
+      `Sessão alternada para ${conta.nome} (${conta.cargo} - ${conta.perfil.toUpperCase()}).`
+    );
+
+    adicionarNotificacao({
+      titulo: `Perfil Alternado: ${conta.nome}`,
+      mensagem: `Perfil ativo: ${conta.cargo} (${conta.departamento}).`,
+      tipo: 'info',
+    });
+  };
+
+  const terminarSessao = () => {
+    setEstaAutenticado(false);
+    registrarAuditoria('Segurança', 'Encerramento de Sessão', `Utilizador ${usuarioAtual.nome} bloqueou a sessão de trabalho.`);
+    adicionarNotificacao({
+      titulo: 'Sessão Bloqueada',
+      mensagem: 'O ecrã foi bloqueado para segurança dos dados contábeis e de RH.',
+      tipo: 'aviso',
+    });
+  };
+
+  const adicionarContaUsuario = (nova: Omit<ContaUsuario, 'id'>) => {
+    const novoId = `USR-${(contasUsuarios.length + 1).toString().padStart(3, '0')}`;
+    const contaCompleta: ContaUsuario = { ...nova, id: novoId };
+    setContasUsuarios(prev => [...prev, contaCompleta]);
+    registrarAuditoria('Segurança', 'Criação de Conta de Utilizador', `Nova conta: ${nova.nome} (${nova.email}) [Perfil: ${nova.perfil}]`);
+    adicionarNotificacao({
+      titulo: 'Nova Conta de Utilizador Criada',
+      mensagem: `A conta para ${nova.nome} (${nova.cargo}) foi adicionada com sucesso.`,
+      tipo: 'sucesso',
+    });
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1725,8 +1839,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         marcarNotificacaoLida,
         marcarTodasNotificacoesLidas,
         adicionarNotificacao,
+        contasUsuarios,
         usuarioAtual,
+        estaAutenticado,
         setDoisFatoresVerificado,
+        fazerLogin,
+        trocarUsuarioRapido,
+        terminarSessao,
+        adicionarContaUsuario,
         licenca,
         validarChaveAtivacao,
         ativarSistema,

@@ -15,6 +15,7 @@ import {
   OrcamentoDepartamento,
   LicencaInfo,
   ConfiguracaoBackupAuto,
+  ContaUsuario,
 } from '../types';
 
 export const initialEmpresa: Empresa = {
@@ -820,5 +821,84 @@ export const initialConfigBackupAuto: ConfiguracaoBackupAuto = {
   proximaExecucao: 'Agendado periodicamente',
   manterHistoricoMax: 30,
 };
+
+export const initialContasUsuarios: ContaUsuario[] = [
+  {
+    id: 'USR-001',
+    nome: 'Eng. E. Benchume',
+    cargo: 'Diretor Executivo & Super Administrador',
+    email: 'ebenchume@sapo.mz',
+    perfil: 'administrador',
+    departamento: 'Direção Executiva & Sistemas',
+    senhaPredefinida: 'admin123',
+    doisFatoresVerificado: true,
+    avatarCor: 'bg-red-700',
+    ultimoAcesso: '2026-10-30 10:45:00',
+  },
+  {
+    id: 'USR-002',
+    nome: 'Carlos Alberto Mondlane',
+    cargo: 'Gerente Financeiro & Contabilista Chefe',
+    email: 'carlos.mondlane@echpro.co.mz',
+    perfil: 'gerente_financeiro',
+    departamento: 'Finanças e Contabilidade',
+    senhaPredefinida: 'gerente123',
+    doisFatoresVerificado: true,
+    avatarCor: 'bg-blue-700',
+    ultimoAcesso: '2026-10-30 09:30:00',
+  },
+  {
+    id: 'USR-003',
+    nome: 'Dra. Ana Luísa Chissano',
+    cargo: 'Gerente de Recursos Humanos & Talentos',
+    email: 'ana.chissano@echpro.co.mz',
+    perfil: 'gerente_rh',
+    departamento: 'Recursos Humanos',
+    senhaPredefinida: 'rh123',
+    idFuncionarioAssociado: 2,
+    doisFatoresVerificado: true,
+    avatarCor: 'bg-purple-700',
+    ultimoAcesso: '2026-10-29 16:15:00',
+  },
+  {
+    id: 'USR-004',
+    nome: 'Fernando Sitoe',
+    cargo: 'Engenheiro de Software Sénior (Colaborador)',
+    email: 'fernando.sitoe@echpro.co.mz',
+    perfil: 'funcionario',
+    departamento: 'Tecnologia da Informação',
+    senhaPredefinida: 'colab123',
+    idFuncionarioAssociado: 3,
+    doisFatoresVerificado: true,
+    avatarCor: 'bg-emerald-700',
+    ultimoAcesso: '2026-10-29 14:00:00',
+  },
+  {
+    id: 'USR-005',
+    nome: 'Sara Esperança Macuácua',
+    cargo: 'Assistente de Contabilidade e Tesouraria',
+    email: 'sara.macuacua@echpro.co.mz',
+    perfil: 'funcionario',
+    departamento: 'Finanças e Contabilidade',
+    senhaPredefinida: 'colab123',
+    idFuncionarioAssociado: 4,
+    doisFatoresVerificado: true,
+    avatarCor: 'bg-teal-700',
+    ultimoAcesso: '2026-10-28 11:20:00',
+  },
+  {
+    id: 'USR-006',
+    nome: 'Dr. Bernardo Tembe',
+    cargo: 'Auditor Fiscal e Tributário Independente',
+    email: 'bernardo.tembe@auditoria.co.mz',
+    perfil: 'auditor',
+    departamento: 'Auditoria Externa',
+    senhaPredefinida: 'audit123',
+    doisFatoresVerificado: true,
+    avatarCor: 'bg-amber-700',
+    ultimoAcesso: '2026-10-27 15:45:00',
+  },
+];
+
 
 

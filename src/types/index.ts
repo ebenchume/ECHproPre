@@ -231,4 +231,27 @@ export interface LicencaInfo {
   assinaturaDigital: string;
 }
 
+export type PerfilUsuario =
+  | 'administrador'
+  | 'gerente_financeiro'
+  | 'gerente_rh'
+  | 'funcionario'
+  | 'auditor';
+
+export interface ContaUsuario {
+  id: string;
+  nome: string;
+  cargo: string;
+  email: string;
+  perfil: PerfilUsuario;
+  departamento: string;
+  senhaPredefinida: string;
+  idFuncionarioAssociado?: number;
+  doisFatoresVerificado: boolean;
+  avatarCor: string;
+  ultimoAcesso?: string;
+  bloqueado?: boolean;
+}
+
+
 

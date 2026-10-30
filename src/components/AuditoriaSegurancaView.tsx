@@ -48,6 +48,8 @@ export const AuditoriaSegurancaView: React.FC = () => {
     exportarCSV,
     sincronizarBackupNuvem,
     usuarioAtual,
+    contasUsuarios,
+    trocarUsuarioRapido,
     licenca,
     lancamentos,
     funcionarios,
@@ -463,6 +465,102 @@ export const AuditoriaSegurancaView: React.FC = () => {
                   Enviar Email
                 </a>
               </div>
+            </div>
+          </div>
+
+          {/* Card de Gestão de Contas de Utilizadores & Perfis (RBAC) */}
+          <div className="md:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-red-50 text-red-700 border border-red-100">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    Contas de Utilizadores e Níveis de Permissão (RBAC)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Controle de acessos segregados: Administradores, Gerentes Financeiros, Gerentes de RH, Funcionários e Auditores
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-bold">
+                {contasUsuarios.length} Contas Registadas
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 text-[11px] font-bold">
+                  <tr>
+                    <th className="p-2.5">Utilizador</th>
+                    <th className="p-2.5">Cargo / Departamento</th>
+                    <th className="p-2.5">Perfil de Acesso</th>
+                    <th className="p-2.5">Email de Login</th>
+                    <th className="p-2.5">2FA & Status</th>
+                    <th className="p-2.5 text-center">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {contasUsuarios.map(conta => {
+                    const isAtivo = conta.id === usuarioAtual.id;
+                    return (
+                      <tr key={conta.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="p-2.5 font-bold text-slate-900 flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-lg ${conta.avatarCor || 'bg-red-700'} text-white flex items-center justify-center font-bold text-[11px]`}>
+                            {conta.nome.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <span>{conta.nome}</span>
+                            {isAtivo && (
+                              <span className="ml-1.5 text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
+                                Conectado
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-2.5 text-slate-700">
+                          <span className="block font-medium">{conta.cargo}</span>
+                          <span className="text-[10px] text-slate-500">{conta.departamento}</span>
+                        </td>
+                        <td className="p-2.5">
+                          <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase border ${
+                            conta.perfil === 'administrador'
+                              ? 'bg-red-50 text-red-800 border-red-200'
+                              : conta.perfil === 'gerente_financeiro'
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : conta.perfil === 'gerente_rh'
+                              ? 'bg-purple-50 text-purple-800 border-purple-200'
+                              : conta.perfil === 'auditor'
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          }`}>
+                            {conta.perfil.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="p-2.5 font-mono text-slate-600 text-[11px]">{conta.email}</td>
+                        <td className="p-2.5">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> 2FA Verificado
+                          </span>
+                        </td>
+                        <td className="p-2.5 text-center">
+                          {isAtivo ? (
+                            <span className="text-[11px] font-bold text-slate-400">Em Uso</span>
+                          ) : (
+                            <button
+                              onClick={() => trocarUsuarioRapido(conta.id)}
+                              className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-[11px] transition-colors cursor-pointer"
+                            >
+                              Alternar Sessão
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

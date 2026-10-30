@@ -1,4 +1,5 @@
 import React from 'react';
+import { useApp } from '../context/AppContext';
 import {
   LayoutDashboard,
   Calculator,
@@ -17,6 +18,7 @@ import {
   Phone,
   Mail,
   ShieldCheck,
+  UserCheck,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,6 +28,7 @@ interface SidebarProps {
   onClose: () => void;
   onOpenLicencaModal?: () => void;
   onOpenWindowsModal?: () => void;
+  onOpenLoginModal?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -35,7 +38,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   onOpenLicencaModal,
   onOpenWindowsModal,
+  onOpenLoginModal,
 }) => {
+  const { usuarioAtual } = useApp();
   const menuItems = [
     {
       id: 'dashboard',
@@ -213,6 +218,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
+
+        {/* Card do Utilizador Conectado */}
+        <div className="px-3 pt-2.5 pb-1 border-t border-slate-200 bg-slate-50/70">
+          <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Conta Conectada</span>
+              <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-bold border border-red-200">
+                {usuarioAtual.perfil.replace('_', ' ')}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-xl ${usuarioAtual.avatarCor || 'bg-red-700'} text-white flex items-center justify-center font-bold text-xs flex-shrink-0`}>
+                {usuarioAtual.nome.slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-slate-900 text-xs truncate leading-tight">{usuarioAtual.nome}</p>
+                <p className="text-[10px] text-slate-500 truncate">{usuarioAtual.cargo}</p>
+              </div>
+            </div>
+            {onOpenLoginModal && (
+              <button
+                onClick={() => {
+                  onOpenLoginModal();
+                  onClose();
+                }}
+                className="w-full py-1.5 px-2 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 text-[11px] font-bold border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5 text-red-600" /> Alternar Conta / Login
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* Acesso Rápido: Ativação & Instalador Windows 10/11 */}
         <div className="px-3 py-2 border-t border-slate-200 bg-slate-50/50 space-y-1.5">
