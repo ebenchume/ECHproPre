@@ -14,6 +14,7 @@ import {
   Sparkles,
   KeyRound,
   Laptop,
+  Database,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -39,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
     doisFatoresAtivo,
     usuarioAtual,
     licenca,
+    configBackupAuto,
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -146,6 +148,17 @@ export const Header: React.FC<HeaderProps> = ({
                 {doisFatoresAtivo ? '2FA Ativo' : 'Ativar 2FA'}
               </span>
               <Lock className="w-3 h-3 text-red-500 ml-0.5" />
+            </button>
+
+            {/* Backup Automático Status */}
+            <button
+              onClick={() => onNavigate('auditoria')}
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-red-800/80 hover:bg-red-800 text-white border border-red-600/80 shadow-xs cursor-pointer"
+              title={`Backup Automático: ${configBackupAuto.ativo ? 'Ativo (' + configBackupAuto.intervaloMinutos + ' min)' : 'Pausado'} - Clique para gerenciar`}
+            >
+              <Database className="w-3.5 h-3.5 text-red-200" />
+              <span>Backup Auto</span>
+              <span className={`w-2 h-2 rounded-full ${configBackupAuto.ativo ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
             </button>
 
             {/* Sino de Notificações */}

@@ -88,10 +88,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'auditoria',
-      label: 'Auditoria & Segurança 2FA',
+      label: 'Auditoria & Backups Auto',
       icon: ShieldAlert,
-      badge: 'AES-256',
-      desc: 'Logs SHA-256, 2FA, Backup Nuvem',
+      badge: 'JSON/CSV',
+      desc: 'Rotina Automática, 2FA & Exportações',
     },
     {
       id: 'suporte',

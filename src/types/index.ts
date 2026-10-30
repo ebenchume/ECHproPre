@@ -190,11 +190,24 @@ export interface NotificacaoAlerta {
 export interface BackupStatus {
   id: string;
   dataHora: string;
-  tipo: 'nuvem_redundante' | 'local_encriptado';
+  tipo: 'nuvem_redundante' | 'local_encriptado' | 'automatico_agendado';
   tamanho: string;
   status: 'sucesso' | 'sincronizado' | 'falha';
   hashVerificacao: string;
   servidorRegiao: string;
+  origem?: 'manual' | 'automatico' | 'restauracao';
+  formato?: 'json' | 'csv' | 'ambos' | 'completo';
+  destino?: 'local' | 'nuvem' | 'ambos';
+}
+
+export interface ConfiguracaoBackupAuto {
+  ativo: boolean;
+  intervaloMinutos: number; // ex: 15, 60, 360, 1440
+  formatoPadrao: 'json' | 'csv' | 'ambos';
+  destino: 'local' | 'nuvem' | 'ambos';
+  ultimoBackup?: string;
+  proximaExecucao?: string;
+  manterHistoricoMax: number;
 }
 
 export interface OrcamentoDepartamento {

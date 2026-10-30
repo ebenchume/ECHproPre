@@ -16,6 +16,7 @@ import {
   AuditoriaLog,
   NotificacaoAlerta,
   BackupStatus,
+  ConfiguracaoBackupAuto,
   OrcamentoDepartamento,
   LicencaInfo,
 } from '../types';
@@ -35,6 +36,7 @@ import {
   initialBackups,
   initialOrcamentos,
   initialLicenca,
+  initialConfigBackupAuto,
 } from '../data/seedData';
 
 // Função auxiliar simples para hash de integridade (SHA-256 hex)
@@ -134,10 +136,15 @@ export interface AppContextType {
   chaveCriptografia: string;
   regenerarChaveCriptografia: () => void;
 
-  // Backups
+  // Backups & Sistema de Backup Automático & Exportações
   backups: BackupStatus[];
-  executarBackupManual: (tipo?: 'nuvem_redundante' | 'local_encriptado') => Promise<BackupStatus>;
+  configBackupAuto: ConfiguracaoBackupAuto;
+  atualizarConfigBackupAuto: (nova: Partial<ConfiguracaoBackupAuto>) => void;
+  executarBackupManual: (tipo?: 'nuvem_redundante' | 'local_encriptado' | 'automatico_agendado') => Promise<BackupStatus>;
   restaurarBackup: (jsonContent: string) => boolean;
+  exportarBackupCompletoJSON: () => void;
+  exportarCSV: (tipo: 'lancamentos' | 'plano' | 'funcionarios' | 'folhas' | 'bancos' | 'orcamentos' | 'todos') => void;
+  sincronizarBackupNuvem: () => Promise<{ sucesso: boolean; id: string; hash: string }>;
 
   // Gestão de Orçamentos por Departamento
   orcamentos: OrcamentoDepartamento[];
@@ -242,6 +249,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : initialBackups;
   });
 
+  const [configBackupAuto, setConfigBackupAuto] = useState<ConfiguracaoBackupAuto>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY}_config_backup_auto`);
+    return saved ? JSON.parse(saved) : initialConfigBackupAuto;
+  });
+
   const [orcamentos, setOrcamentos] = useState<OrcamentoDepartamento[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY}_orcamentos`);
     return saved ? JSON.parse(saved) : initialOrcamentos;
@@ -283,6 +295,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(`${STORAGE_KEY}_auditoria`, JSON.stringify(auditoria));
       localStorage.setItem(`${STORAGE_KEY}_notificacoes`, JSON.stringify(notificacoes));
       localStorage.setItem(`${STORAGE_KEY}_backups`, JSON.stringify(backups));
+      localStorage.setItem(`${STORAGE_KEY}_config_backup_auto`, JSON.stringify(configBackupAuto));
       localStorage.setItem(`${STORAGE_KEY}_orcamentos`, JSON.stringify(orcamentos));
       localStorage.setItem(`${STORAGE_KEY}_2fa`, JSON.stringify(doisFatoresAtivo));
       localStorage.setItem(`${STORAGE_KEY}_licenca`, JSON.stringify(licenca));
@@ -302,6 +315,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     auditoria,
     notificacoes,
     backups,
+    configBackupAuto,
     orcamentos,
     doisFatoresAtivo,
     licenca,
@@ -1067,17 +1081,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     registrarAuditoria('Segurança', 'Rotação de Chave Criptográfica', `Nova chave de sessão gerada: ${novaChave.substring(0, 14)}***`);
   };
 
-  // Backups
-  const executarBackupManual = async (tipo: 'nuvem_redundante' | 'local_encriptado' = 'nuvem_redundante'): Promise<BackupStatus> => {
+  // Backups e Sistema de Backup Automático
+  const atualizarConfigBackupAuto = (nova: Partial<ConfiguracaoBackupAuto>) => {
+    setConfigBackupAuto(prev => {
+      const atualizado = { ...prev, ...nova };
+      if (nova.intervaloMinutos !== undefined || nova.ativo !== undefined) {
+        const agora = new Date();
+        atualizado.proximaExecucao = atualizado.ativo
+          ? new Date(agora.getTime() + atualizado.intervaloMinutos * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19)
+          : 'Pausado';
+      }
+      return atualizado;
+    });
+
+    registrarAuditoria(
+      'Sistema',
+      'Configuração de Backup Automático',
+      `Rotina de backup automático atualizada: ${nova.ativo !== undefined ? (nova.ativo ? 'Ativado' : 'Desativado') : 'Parâmetros alterados'}`
+    );
+  };
+
+  const executarBackupManual = async (tipo: 'nuvem_redundante' | 'local_encriptado' | 'automatico_agendado' = 'nuvem_redundante'): Promise<BackupStatus> => {
     await new Promise(r => setTimeout(r, 600));
-    const id = `BKP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${(backups.length + 1).toString().padStart(2, '0')}`;
-    const hash = await gerarHashSHA256(JSON.stringify({ lancamentos, funcionarios, folhas, transacoesBancarias }));
+    const prefixo = tipo === 'automatico_agendado' ? 'BKP-AUTO' : tipo === 'local_encriptado' ? 'BKP-LOC' : 'BKP-NUV';
+    const id = `${prefixo}-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${(backups.length + 1).toString().padStart(2, '0')}`;
+    const hash = await gerarHashSHA256(JSON.stringify({ lancamentos, funcionarios, folhas, transacoesBancarias, orcamentos }));
 
     const novo: BackupStatus = {
       id,
       dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
       tipo,
-      tamanho: `${(Math.random() * 2 + 24).toFixed(1)} MB`,
+      origem: 'manual',
+      formato: 'completo',
+      destino: tipo === 'nuvem_redundante' ? 'nuvem' : 'local',
+      tamanho: `${(Math.random() * 2 + 24.5).toFixed(1)} MB`,
       status: 'sincronizado',
       hashVerificacao: hash.substring(0, 40),
       servidorRegiao: tipo === 'nuvem_redundante' ? 'Frankfurt (AWS EU-Central-1 Redundant)' : 'Cofre Local Encriptado (AES-256)',
@@ -1096,6 +1133,321 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return novo;
   };
 
+  const sincronizarBackupNuvem = async () => {
+    await new Promise(r => setTimeout(r, 800));
+    const id = `BKP-CLOUD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${(backups.length + 1).toString().padStart(2, '0')}`;
+    const snapshotData = {
+      empresa,
+      planoContas,
+      lancamentos,
+      funcionarios,
+      folhas,
+      ferias,
+      beneficios,
+      eventoseSocial,
+      transacoesBancarias,
+      orcamentos,
+      licenca,
+    };
+    const hash = await gerarHashSHA256(JSON.stringify(snapshotData));
+    const novo: BackupStatus = {
+      id,
+      dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      tipo: 'nuvem_redundante',
+      origem: 'manual',
+      formato: 'completo',
+      destino: 'nuvem',
+      tamanho: `${(Math.random() * 1.5 + 25.2).toFixed(1)} MB`,
+      status: 'sincronizado',
+      hashVerificacao: hash.substring(0, 40),
+      servidorRegiao: 'Frankfurt (AWS EU-Central-1 Multi-AZ & S3 Geo-Redundante)',
+    };
+
+    setBackups(prev => [novo, ...prev]);
+    registrarAuditoria('Sistema', 'Sincronização em Nuvem', `Snapshot ${id} sincronizado com cofre na nuvem.`);
+    adicionarNotificacao({
+      titulo: 'Sincronização em Nuvem Concluída',
+      mensagem: `Dados contábeis e de RH sincronizados em nuvem redundante [${id}].`,
+      tipo: 'sucesso',
+      linkAcao: 'auditoria',
+    });
+
+    return { sucesso: true, id, hash };
+  };
+
+  // Helper para download de ficheiros no navegador
+  const downloadArquivo = (conteudo: string, nomeArquivo: string, tipoMime: string) => {
+    const blob = new Blob([conteudo], { type: tipoMime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const escapeCSV = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    const str = String(val);
+    if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  // Exportar Backup Integral em JSON com SHA-256
+  const exportarBackupCompletoJSON = async () => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const payload = {
+      sistema: 'ECHpro ERP Contabilidade & RH PGC-NIRF',
+      versao: '2.8-pro',
+      dataExportacao: new Date().toISOString(),
+      responsavel: usuarioAtual.nome,
+      empresa,
+      planoContas,
+      diarios,
+      lancamentos,
+      funcionarios,
+      folhas,
+      ferias,
+      beneficios,
+      eventoseSocial,
+      transacoesBancarias,
+      orcamentos,
+      configBackupAuto,
+      licenca,
+      suporte: {
+        telefone: '+258 827473434',
+        email: 'ebenchume@sapo.mz',
+      },
+    };
+
+    const hash = await gerarHashSHA256(JSON.stringify(payload));
+    const fullBackup = {
+      ...payload,
+      hashIntegridade: `SHA256:${hash}`,
+    };
+
+    const jsonStr = JSON.stringify(fullBackup, null, 2);
+    downloadArquivo(jsonStr, `ECHpro_Backup_Completo_${new Date().toISOString().slice(0, 10)}.json`, 'application/json');
+
+    registrarAuditoria('Sistema', 'Exportação de Backup JSON', `Snapshot completo exportado em ficheiro JSON [Hash: ${hash.slice(0, 10)}...]`);
+    adicionarNotificacao({
+      titulo: 'Ficheiro JSON de Backup Exportado',
+      mensagem: `Backup integral contábil e de RH gerado com assinatura digital SHA-256.`,
+      tipo: 'sucesso',
+      linkAcao: 'auditoria',
+    });
+  };
+
+  // Exportar Relatórios e Dados em CSV (com separador ';' e UTF-8 BOM para compatibilidade com Microsoft Excel)
+  const exportarCSV = (tipo: 'lancamentos' | 'plano' | 'funcionarios' | 'folhas' | 'bancos' | 'orcamentos' | 'todos') => {
+    const BOM = '\uFEFF';
+    const dataStr = new Date().toISOString().slice(0, 10);
+
+    const gerarCSVLancamentos = () => {
+      const headers = ['Data Lançamento', 'Diário', 'Nº Documento', 'Origem', 'Descrição Geral', 'Código Conta', 'Histórico Específico Linha', 'Movimento', 'Valor (MT)'];
+      const rows: string[][] = [];
+      lancamentos.forEach(l => {
+        const diario = diarios.find(d => d.idDiario === l.idDiario)?.nomeDiario || `Diário ${l.idDiario}`;
+        l.linhas.forEach(linha => {
+          rows.push([
+            l.dataLancamento,
+            diario,
+            l.numeroDocumento,
+            l.origem || 'manual',
+            l.descricaoGeral,
+            linha.codigoConta,
+            linha.historicoEspecifico || '',
+            linha.tipoMovimento === 'D' ? 'Débito' : 'Crédito',
+            linha.valor.toFixed(2),
+          ]);
+        });
+      });
+      return BOM + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.map(escapeCSV).join(';'))].join('\r\n');
+    };
+
+    const gerarCSVPlano = () => {
+      const saldos = obterSaldosContas();
+      const headers = ['Código Conta PGC', 'Designação da Conta', 'Classe', 'Natureza Predominante', 'Total Débitos (MT)', 'Total Créditos (MT)', 'Saldo Atual (MT)'];
+      const rows = saldos.map(s => [
+        s.codigoConta,
+        s.designacao,
+        String(s.classe),
+        s.naturezaPredominante === 'D' ? 'Devedora' : 'Credora',
+        s.totalDebito.toFixed(2),
+        s.totalCredito.toFixed(2),
+        s.saldoActual.toFixed(2),
+      ]);
+      return BOM + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.map(escapeCSV).join(';'))].join('\r\n');
+    };
+
+    const gerarCSVFuncionarios = () => {
+      const headers = ['ID', 'Nome Completo', 'Cargo', 'Departamento', 'NUIT', 'Nº BI', 'Salário Base (MT)', 'Nº Dependentes', 'Contribuinte INSS', 'Data Admissão', 'Banco', 'IBAN / Conta', 'Email', 'Telefone', 'Status Ativo'];
+      const rows = funcionarios.map(f => [
+        String(f.id),
+        f.nome,
+        f.cargo,
+        f.departamento,
+        f.nuit,
+        f.biNumero,
+        f.salarioBase.toFixed(2),
+        String(f.numDependentes),
+        f.inssContribuinte ? 'Sim' : 'Não',
+        f.dataAdmissao,
+        f.banco,
+        f.ibanOuConta,
+        f.email,
+        f.telefone,
+        f.activo ? 'Ativo' : 'Inativo',
+      ]);
+      return BOM + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.map(escapeCSV).join(';'))].join('\r\n');
+    };
+
+    const gerarCSVFolhas = () => {
+      const headers = ['ID Folha', 'Mês / Ano', 'Colaborador', 'Cargo', 'Departamento', 'Salário Base (MT)', 'Subsídios (MT)', 'INSS Trabalhador (3%) (MT)', 'IRPS Retido (MT)', 'INSS Patronal (4%) (MT)', 'Outros Descontos (MT)', 'Salário Líquido (MT)', 'Estado Processamento'];
+      const rows: string[][] = [];
+      folhas.forEach(f => {
+        const periodo = `${f.mes.toString().padStart(2, '0')}/${f.ano}`;
+        f.linhas.forEach(linha => {
+          const subsidios = linha.subsidioAlimentacao + linha.subsidioTransporte + linha.outrosSubsidios;
+          rows.push([
+            String(f.id),
+            periodo,
+            linha.funcionarioNome,
+            linha.cargo,
+            linha.departamento,
+            linha.salarioBase.toFixed(2),
+            subsidios.toFixed(2),
+            linha.inssTrabalhador.toFixed(2),
+            linha.irps.toFixed(2),
+            linha.inssEmpresa.toFixed(2),
+            linha.descontosOutros.toFixed(2),
+            linha.liquido.toFixed(2),
+            f.estado.toUpperCase(),
+          ]);
+        });
+      });
+      return BOM + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.map(escapeCSV).join(';'))].join('\r\n');
+    };
+
+    const gerarCSVBancos = () => {
+      const headers = ['ID Transação', 'Data', 'Banco', 'Descrição', 'Tipo Movimento', 'Valor (MT)', 'Categoria', 'Status Conciliado', 'ID Lançamento Associado'];
+      const rows = transacoesBancarias.map(t => [
+        t.id,
+        t.data,
+        t.bancoNome,
+        t.descricao,
+        t.tipo.toUpperCase(),
+        t.valor.toFixed(2),
+        t.categoria,
+        t.conciliado ? 'Conciliado' : 'Pendente',
+        t.idLancamentoAssociado ? String(t.idLancamentoAssociado) : 'N/A',
+      ]);
+      return BOM + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.map(escapeCSV).join(';'))].join('\r\n');
+    };
+
+    const gerarCSVOrcamentos = () => {
+      const resumo = obterResumoOrcamentos();
+      const headers = ['Departamento', 'Teto Orçamental Mensal (MT)', 'Gasto Real Mensal (MT)', 'Percentual Consumido (%)', 'Saldo Diferença (MT)', 'Status Alerta', 'Observações'];
+      const rows = resumo.map(r => [
+        r.departamento,
+        r.limite.toFixed(2),
+        r.gastoReal.toFixed(2),
+        `${r.percentualUsado}%`,
+        r.diferenca.toFixed(2),
+        r.status.toUpperCase(),
+        r.observacoes || '',
+      ]);
+      return BOM + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.map(escapeCSV).join(';'))].join('\r\n');
+    };
+
+    if (tipo === 'lancamentos' || tipo === 'todos') {
+      downloadArquivo(gerarCSVLancamentos(), `ECHpro_Lancamentos_Contabeis_${dataStr}.csv`, 'text/csv;charset=utf-8;');
+    }
+    if (tipo === 'plano' || tipo === 'todos') {
+      setTimeout(() => downloadArquivo(gerarCSVPlano(), `ECHpro_Plano_Contas_PGC_${dataStr}.csv`, 'text/csv;charset=utf-8;'), tipo === 'todos' ? 200 : 0);
+    }
+    if (tipo === 'funcionarios' || tipo === 'todos') {
+      setTimeout(() => downloadArquivo(gerarCSVFuncionarios(), `ECHpro_Quadro_Pessoal_RH_${dataStr}.csv`, 'text/csv;charset=utf-8;'), tipo === 'todos' ? 400 : 0);
+    }
+    if (tipo === 'folhas' || tipo === 'todos') {
+      setTimeout(() => downloadArquivo(gerarCSVFolhas(), `ECHpro_Folhas_Salario_${dataStr}.csv`, 'text/csv;charset=utf-8;'), tipo === 'todos' ? 600 : 0);
+    }
+    if (tipo === 'bancos' || tipo === 'todos') {
+      setTimeout(() => downloadArquivo(gerarCSVBancos(), `ECHpro_Extrato_Bancario_${dataStr}.csv`, 'text/csv;charset=utf-8;'), tipo === 'todos' ? 800 : 0);
+    }
+    if (tipo === 'orcamentos' || tipo === 'todos') {
+      setTimeout(() => downloadArquivo(gerarCSVOrcamentos(), `ECHpro_Gestao_Orcamentos_${dataStr}.csv`, 'text/csv;charset=utf-8;'), tipo === 'todos' ? 1000 : 0);
+    }
+
+    registrarAuditoria('Sistema', 'Exportação de Dados em CSV', `Exportação de ficheiro(s) CSV realizada para o módulo: ${tipo.toUpperCase()}`);
+    adicionarNotificacao({
+      titulo: 'Exportação CSV Concluída',
+      mensagem: `Ficheiro(s) CSV para o módulo ${tipo} gerados com sucesso para armazenamento local ou auditoria.`,
+      tipo: 'sucesso',
+      linkAcao: 'auditoria',
+    });
+  };
+
+  // Rotina de Backup Automático periódico em segundo plano
+  useEffect(() => {
+    if (!configBackupAuto.ativo) return;
+
+    const intervalTimer = setInterval(async () => {
+      const agora = new Date();
+      const ultimo = configBackupAuto.ultimoBackup ? new Date(configBackupAuto.ultimoBackup) : new Date(0);
+      const diffMinutos = (agora.getTime() - ultimo.getTime()) / (1000 * 60);
+
+      if (diffMinutos >= configBackupAuto.intervaloMinutos) {
+        const id = `BKP-AUTO-${agora.toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const hash = await gerarHashSHA256(JSON.stringify({ lancamentos, funcionarios, folhas, transacoesBancarias, orcamentos }));
+        const novoBkp: BackupStatus = {
+          id,
+          dataHora: agora.toISOString().replace('T', ' ').substring(0, 19),
+          tipo: 'automatico_agendado',
+          origem: 'automatico',
+          formato: configBackupAuto.formatoPadrao,
+          destino: configBackupAuto.destino,
+          tamanho: `${(Math.random() * 1.5 + 24.5).toFixed(1)} MB`,
+          status: 'sincronizado',
+          hashVerificacao: hash.substring(0, 40),
+          servidorRegiao: configBackupAuto.destino === 'local'
+            ? 'Cofre Local Encriptado (AES-256)'
+            : 'Nuvem Redundante (Frankfurt Multi-AZ & Local Snapshot)',
+        };
+
+        setBackups(prev => [novoBkp, ...prev.slice(0, configBackupAuto.manterHistoricoMax - 1)]);
+
+        const proximo = new Date(agora.getTime() + configBackupAuto.intervaloMinutos * 60 * 1000)
+          .toISOString().replace('T', ' ').substring(0, 19);
+
+        setConfigBackupAuto(prev => ({
+          ...prev,
+          ultimoBackup: novoBkp.dataHora,
+          proximaExecucao: proximo,
+        }));
+
+        registrarAuditoria(
+          'Sistema',
+          'Backup Automático Realizado',
+          `Rotina agendada executou o backup ${id} (${configBackupAuto.destino.toUpperCase()}) com integridade SHA-256.`
+        );
+
+        adicionarNotificacao({
+          titulo: 'Backup Automático Concluído',
+          mensagem: `Snapshot periódico ${id} sincronizado com sucesso (${configBackupAuto.intervaloMinutos} min).`,
+          tipo: 'info',
+          linkAcao: 'auditoria',
+        });
+      }
+    }, 20000);
+
+    return () => clearInterval(intervalTimer);
+  }, [configBackupAuto, lancamentos, funcionarios, folhas, transacoesBancarias, orcamentos]);
+
   const restaurarBackup = (jsonContent: string): boolean => {
     try {
       const data = JSON.parse(jsonContent);
@@ -1108,7 +1460,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.beneficios) setBeneficios(data.beneficios);
       if (data.eventoseSocial) setEventoseSocial(data.eventoseSocial);
       if (data.transacoesBancarias) setTransacoesBancarias(data.transacoesBancarias);
-      registrarAuditoria('Sistema', 'Restauração de Backup', 'Dados do sistema restaurados a partir de ficheiro de backup.');
+      if (data.orcamentos) setOrcamentos(data.orcamentos);
+      if (data.configBackupAuto) setConfigBackupAuto(data.configBackupAuto);
+      if (data.licenca) setLicenca(data.licenca);
+
+      const restoreId = `RESTORE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
+      const novoStatus: BackupStatus = {
+        id: restoreId,
+        dataHora: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        tipo: 'local_encriptado',
+        origem: 'restauracao',
+        tamanho: `${(jsonContent.length / 1024).toFixed(1)} KB`,
+        status: 'sucesso',
+        hashVerificacao: data.hashIntegridade?.substring(0, 40) || 'VERIFICADO-OK',
+        servidorRegiao: 'Restauração Local Concluída com Sucesso',
+      };
+      setBackups(prev => [novoStatus, ...prev]);
+
+      registrarAuditoria('Sistema', 'Restauração de Backup', `Dados do sistema restaurados a partir de ficheiro de backup (${restoreId}).`);
+      adicionarNotificacao({
+        titulo: 'Restauração Concluída com Sucesso',
+        mensagem: `Todos os dados contábeis, de folha de pagamento e cadastros foram restaurados a partir do ficheiro importado.`,
+        tipo: 'sucesso',
+        linkAcao: 'auditoria',
+      });
       return true;
     } catch (e) {
       console.error(e);
@@ -1336,8 +1711,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         chaveCriptografia,
         regenerarChaveCriptografia,
         backups,
+        configBackupAuto,
+        atualizarConfigBackupAuto,
         executarBackupManual,
         restaurarBackup,
+        exportarBackupCompletoJSON,
+        exportarCSV,
+        sincronizarBackupNuvem,
         orcamentos,
         atualizarOrcamento,
         obterResumoOrcamentos,

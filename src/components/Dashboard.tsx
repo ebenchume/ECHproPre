@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   Sparkles,
+  Database,
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -118,6 +119,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
               title="Consultar Webhooks bancários via Open Banking"
             >
               <RefreshCw className="w-4 h-4 text-white" /> Sync Bancário
+            </button>
+            <button
+              onClick={() => onNavigate('auditoria')}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-800/90 hover:bg-red-900 text-white font-semibold text-xs border border-red-500 transition-colors cursor-pointer shadow-xs"
+              title="Acessar Sistema de Backup Automático e Exportação CSV/JSON"
+            >
+              <Database className="w-4 h-4 text-white" /> Backup & Exportação
             </button>
           </div>
         </div>

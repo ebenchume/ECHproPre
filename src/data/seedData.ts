@@ -14,6 +14,7 @@ import {
   BackupStatus,
   OrcamentoDepartamento,
   LicencaInfo,
+  ConfiguracaoBackupAuto,
 } from '../types';
 
 export const initialEmpresa: Empresa = {
@@ -809,4 +810,15 @@ export const initialOrcamentos: OrcamentoDepartamento[] = [
     observacoes: 'Logística de escritório, suprimentos e serviços gerais',
   },
 ];
+
+export const initialConfigBackupAuto: ConfiguracaoBackupAuto = {
+  ativo: true,
+  intervaloMinutos: 60,
+  formatoPadrao: 'ambos',
+  destino: 'ambos',
+  ultimoBackup: '2026-10-29 02:00:15',
+  proximaExecucao: 'Agendado periodicamente',
+  manterHistoricoMax: 30,
+};
+
 
