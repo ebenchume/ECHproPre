@@ -131,7 +131,12 @@ export interface AppContextType {
 
   // Auditoria & Segurança 2FA
   auditoria: AuditoriaLog[];
-  registrarAuditoria: (modulo: AuditoriaLog['modulo'], acao: string, detalhes: string) => void;
+  registrarAuditoria: (
+    modulo: AuditoriaLog['modulo'],
+    acao: string,
+    detalhes: string,
+    metadados?: Partial<AuditoriaLog>
+  ) => void;
   doisFatoresAtivo: boolean;
   alternar2FA: (ativar: boolean) => void;
   verificarCodigo2FA: (codigo: string) => boolean;
@@ -347,12 +352,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const registrarAuditoria = async (
     modulo: AuditoriaLog['modulo'],
     acao: string,
-    detalhes: string
+    detalhes: string,
+    metadados?: Partial<AuditoriaLog>
   ) => {
     const dataHora = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const id = `LOG-${Date.now().toString().slice(-6)}`;
     const hashIntegridade = await gerarHashSHA256(
-      `${id}-${dataHora}-${usuarioAtual.email}-${modulo}-${acao}-${detalhes}`
+      `${id}-${dataHora}-${usuarioAtual.email}-${modulo}-${acao}-${detalhes}-${metadados?.documentoRef || ''}`
     );
     const novoLog: AuditoriaLog = {
       id,
@@ -363,6 +369,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       detalhes,
       ip: '197.235.12.84',
       hashIntegridade,
+      perfilUsuario: usuarioAtual.perfil,
+      ...metadados,
     };
     setAuditoria(prev => [novoLog, ...prev]);
   };
@@ -378,7 +386,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (exists) return prev;
       return [...prev, conta].sort((a, b) => a.codigoConta.localeCompare(b.codigoConta));
     });
-    registrarAuditoria('Contabilidade', 'Criação de Conta Contábil', `Adicionada conta ${conta.codigoConta} - ${conta.designacao}`);
+    registrarAuditoria(
+      'Contabilidade',
+      'Criação de Conta Contábil',
+      `Adicionada conta ${conta.codigoConta} - ${conta.designacao}`,
+      {
+        tipoOperacao: 'CRIACAO',
+        entidadeAfetada: 'ContaContabil',
+        documentoRef: `PGC-${conta.codigoConta}`,
+        contasEnvolvidas: [conta.codigoConta],
+        justificativa: `Registo oficial da conta no Plano PGC-NIRF (${conta.classe})`,
+      }
+    );
   };
 
   const criarLancamento = (
@@ -426,10 +445,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setLancamentos(prev => [novoLancamento, ...prev]);
+    const contasEnvolvidas = Array.from(new Set(linhasInput.map(l => l.codigoConta)));
     registrarAuditoria(
       'Contabilidade',
       `Novo Lançamento (${numeroDoc})`,
-      `${descricao} [Total: ${debito.toFixed(2)} ${empresa.moeda}]`
+      `${descricao} [Total: ${debito.toFixed(2)} ${empresa.moeda}]`,
+      {
+        tipoOperacao: 'CRIACAO',
+        entidadeAfetada: 'Lancamento',
+        documentoRef: numeroDoc,
+        valorOperacao: debito,
+        partidasAfetadas: `${linhasInput.length} partidas dobradas (D: ${debito.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} MT | C: ${credito.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} MT)`,
+        contasEnvolvidas,
+        justificativa: descricao,
+      }
     );
 
     return { sucesso: true, mensagem: 'Lançamento gravado com sucesso no razão!', idLancamento: novoId };
@@ -616,8 +645,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     registrarAuditoria(
       'Contabilidade',
-      `Fecho de Exercício Contábil ${ano}`,
-      `Total Gastos: ${totalGastos.toFixed(2)} MT, Total Rendimentos: ${totalRendimentos.toFixed(2)} MT, Lucro Líquido: ${(lucroAntesImposto - irpcDevido).toFixed(2)} MT`
+      `Fecho de Exercício Fiscal ${ano}`,
+      `Total Gastos: ${totalGastos.toFixed(2)} MT, Total Rendimentos: ${totalRendimentos.toFixed(2)} MT, Lucro Líquido: ${(lucroAntesImposto - irpcDevido).toFixed(2)} MT`,
+      {
+        tipoOperacao: 'FECHO',
+        entidadeAfetada: 'FechoExercicio',
+        documentoRef: `FECHO-${ano}`,
+        valorOperacao: totalGastos + totalRendimentos,
+        partidasAfetadas: `${linhasFecho.length} partidas dobradas com contrapartida em 8.1 Resultados Operacionais`,
+        contasEnvolvidas: Array.from(new Set(linhasFecho.map(l => l.codigoConta))),
+        justificativa: `Apuramento fiscal anual e encerramento de contas das classes 6 e 7 (Taxa IRPC: ${(taxaIrpc * 100).toFixed(0)}%)`,
+      }
     );
 
     adicionarNotificacao({
@@ -824,7 +862,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       registrarAuditoria(
         'Contabilidade',
         `Integração de Folha na Contabilidade`,
-        `Folha ${folha.mes}/${folha.ano} contabilizada no lançamento ID #${res.idLancamento} [Diário FS]`
+        `Folha ${folha.mes}/${folha.ano} contabilizada no lançamento ID #${res.idLancamento} [Diário FS]`,
+        {
+          tipoOperacao: 'CRIACAO',
+          entidadeAfetada: 'Lancamento',
+          documentoRef: `FS-${folha.ano}/${folha.mes.toString().padStart(2, '0')}`,
+          valorOperacao: totalSalarioBase + totalSubsidios + totalInssEmpresa,
+          contasEnvolvidas: ['6.2.2', '6.2.4', '6.2.3', '2.4.5', '2.4.6.1', '2.6.1'],
+          justificativa: `Integração e contabilização de vencimentos e encargos sociais de ${folha.mes}/${folha.ano}`,
+        }
       );
       return { sucesso: true, mensagem: `Folha integrada com sucesso na contabilidade (Lançamento #${res.idLancamento})!` };
     }
@@ -1067,9 +1113,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     registrarAuditoria(
-      'Bancos',
+      'Contabilidade',
       'Conciliação Bancária Confirmada',
-      `Transação ${tx.id} (${tx.valor.toFixed(2)} MT) conciliada com sucesso com lançamento #${idLanc || 'OK'}`
+      `Transação ${tx.id} (${tx.valor.toFixed(2)} MT) conciliada com sucesso com lançamento #${idLanc || 'OK'}`,
+      {
+        tipoOperacao: 'CONCILIACAO',
+        entidadeAfetada: 'Conciliacao',
+        documentoRef: tx.numeroDocumento || tx.id,
+        valorOperacao: tx.valor,
+        contasEnvolvidas: [tx.idContaBancaria, codigoContaContrapartida],
+        justificativa: `Confrontação de extracto bancário e regularização contábil no razão`,
+      }
     );
 
     return { sucesso: true, mensagem: 'Transação bancária conciliada com sucesso no razão contábil!' };
@@ -1557,9 +1611,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     registrarAuditoria(
-      'Sistema',
+      'Contabilidade',
       'Definição de Limite de Orçamento',
-      `Orçamento do departamento ${departamento} ajustado para ${novoLimite.toLocaleString()} MT`
+      `Orçamento do departamento ${departamento} ajustado para ${novoLimite.toLocaleString()} MT`,
+      {
+        tipoOperacao: 'ORCAMENTO',
+        entidadeAfetada: 'Orcamento',
+        documentoRef: `ORC-${departamento.toUpperCase().replace(/\s+/g, '-').slice(0, 8)}`,
+        valorOperacao: novoLimite,
+        justificativa: observacoes || `Definição de teto orçamental para departamento ${departamento}`,
+      }
     );
 
     adicionarNotificacao({

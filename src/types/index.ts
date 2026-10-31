@@ -175,6 +175,14 @@ export interface AuditoriaLog {
   detalhes: string;
   ip: string;
   hashIntegridade: string;
+  perfilUsuario?: string;
+  tipoOperacao?: 'CRIACAO' | 'ALTERACAO' | 'EXCLUSAO' | 'CONCILIACAO' | 'FECHO' | 'ORCAMENTO';
+  entidadeAfetada?: 'Lancamento' | 'ContaContabil' | 'Balancete' | 'FechoExercicio' | 'Orcamento' | 'Conciliacao' | 'Sistema';
+  documentoRef?: string;
+  valorOperacao?: number;
+  partidasAfetadas?: string;
+  contasEnvolvidas?: string[];
+  justificativa?: string;
 }
 
 export interface NotificacaoAlerta {

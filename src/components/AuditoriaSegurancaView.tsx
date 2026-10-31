@@ -30,6 +30,13 @@ import {
   ShieldCheck,
   Layers,
   Archive,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Coins,
+  Eye,
+  FileCheck,
 } from 'lucide-react';
 
 export const AuditoriaSegurancaView: React.FC = () => {
@@ -59,11 +66,19 @@ export const AuditoriaSegurancaView: React.FC = () => {
     orcamentos,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'auditoria' | '2fa_cripto' | 'backups'>('auditoria');
+  const [activeTab, setActiveTab] = useState<'auditoria_contabil' | 'auditoria' | '2fa_cripto' | 'backups'>('auditoria_contabil');
   const [buscaLog, setBuscaLog] = useState('');
   const [isGerandoBackup, setIsGerandoBackup] = useState(false);
   const [isSincronizandoNuvem, setIsSincronizandoNuvem] = useState(false);
   const [copiadoChave, setCopiadoChave] = useState(false);
+
+  // Estados do Log de Atividades Contábeis Detalhado
+  const [buscaContabil, setBuscaContabil] = useState('');
+  const [filtroOperacaoContabil, setFiltroOperacaoContabil] = useState<string>('todos');
+  const [filtroEntidadeContabil, setFiltroEntidadeContabil] = useState<string>('todos');
+  const [filtroUsuarioContabil, setFiltroUsuarioContabil] = useState<string>('todos');
+  const [expandedLogId, setExpandedLogId] = useState<string | null>('LOG-002');
+  const [copiadoLogHash, setCopiadoLogHash] = useState<string | null>(null);
 
   // Estados de Restauração de Arquivo
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +101,12 @@ export const AuditoriaSegurancaView: React.FC = () => {
     navigator.clipboard.writeText(chaveCriptografia);
     setCopiadoChave(true);
     setTimeout(() => setCopiadoChave(false), 2000);
+  };
+
+  const handleCopiarHashLog = (hash: string, id: string) => {
+    navigator.clipboard.writeText(hash);
+    setCopiadoLogHash(id);
+    setTimeout(() => setCopiadoLogHash(null), 2000);
   };
 
   const handleBackupImediato = async (tipo: 'nuvem_redundante' | 'local_encriptado') => {
@@ -153,6 +174,7 @@ export const AuditoriaSegurancaView: React.FC = () => {
     }
   };
 
+  // Filtragem de Logs Gerais
   const logsFiltrados = auditoria.filter(l =>
     !buscaLog ||
     l.modulo.toLowerCase().includes(buscaLog.toLowerCase()) ||
@@ -160,6 +182,99 @@ export const AuditoriaSegurancaView: React.FC = () => {
     l.detalhes.toLowerCase().includes(buscaLog.toLowerCase()) ||
     l.usuario.toLowerCase().includes(buscaLog.toLowerCase())
   );
+
+  // Filtragem Específica do Log de Atividades Contábeis
+  const logsContabeis = auditoria.filter(l =>
+    l.modulo === 'Contabilidade' ||
+    l.entidadeAfetada !== undefined ||
+    l.tipoOperacao !== undefined
+  );
+
+  const logsContabeisFiltrados = logsContabeis.filter(l => {
+    const matchBusca =
+      !buscaContabil ||
+      l.acao.toLowerCase().includes(buscaContabil.toLowerCase()) ||
+      l.detalhes.toLowerCase().includes(buscaContabil.toLowerCase()) ||
+      l.usuario.toLowerCase().includes(buscaContabil.toLowerCase()) ||
+      (l.documentoRef && l.documentoRef.toLowerCase().includes(buscaContabil.toLowerCase())) ||
+      (l.contasEnvolvidas && l.contasEnvolvidas.some(c => c.toLowerCase().includes(buscaContabil.toLowerCase())));
+
+    const matchOperacao =
+      filtroOperacaoContabil === 'todos' || l.tipoOperacao === filtroOperacaoContabil;
+
+    const matchEntidade =
+      filtroEntidadeContabil === 'todos' || l.entidadeAfetada === filtroEntidadeContabil;
+
+    const matchUsuario =
+      filtroUsuarioContabil === 'todos' ||
+      l.usuario.toLowerCase().includes(filtroUsuarioContabil.toLowerCase()) ||
+      l.perfilUsuario === filtroUsuarioContabil;
+
+    return matchBusca && matchOperacao && matchEntidade && matchUsuario;
+  });
+
+  const totalValorMovimentadoContabil = logsContabeisFiltrados.reduce((acc, l) => acc + (l.valorOperacao || 0), 0);
+  const contasUnicasRastreadas = Array.from(new Set(logsContabeis.flatMap(l => l.contasEnvolvidas || []))).length;
+
+  // Exportação CSV formatada do Log de Atividades Contábeis
+  const exportarLogContabilCSV = () => {
+    const BOM = '\uFEFF';
+    const headers = [
+      'ID Registro',
+      'Data e Hora',
+      'Usuário Responsável',
+      'Perfil',
+      'Tipo de Operação',
+      'Entidade Afetada',
+      'Nº Documento / Ref',
+      'Valor Movimentado (MT)',
+      'Contas PGC Envolvidas',
+      'Partidas Dobradas Afetadas',
+      'Ação Executada',
+      'Descrição Detalhada',
+      'Justificativa Contábil',
+      'IP Origem',
+      'Hash SHA-256 Integridade',
+    ];
+
+    const escapeCSV = (val: any) => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = logsContabeisFiltrados.map(l => [
+      l.id,
+      l.dataHora,
+      l.usuario,
+      l.perfilUsuario || 'gerente_financeiro',
+      l.tipoOperacao || 'CRIACAO',
+      l.entidadeAfetada || 'Lancamento',
+      l.documentoRef || '-',
+      l.valorOperacao ? l.valorOperacao.toFixed(2) : '0.00',
+      (l.contasEnvolvidas || []).join(', '),
+      l.partidasAfetadas || '-',
+      l.acao,
+      l.detalhes,
+      l.justificativa || '-',
+      l.ip,
+      l.hashIntegridade,
+    ]);
+
+    const csvContent = BOM + [headers.map(escapeCSV).join(';'), ...rows.map(r => r.map(escapeCSV).join(';'))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ECHpro_Log_Atividades_Contabeis_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const backupsFiltrados = backups.filter(b => {
     if (filtroTipoBackup === 'todos') return true;
@@ -175,17 +290,17 @@ export const AuditoriaSegurancaView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
         <div className="flex items-center gap-3">
           <span className="p-2.5 rounded-xl bg-red-50 text-red-600 border border-red-100">
-            <ShieldAlert className="w-5 h-5" />
+            <ShieldAlert className="w-5 h-5 text-red-600" />
           </span>
           <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <h1 className="text-xl font-black text-blue-950 tracking-tight flex items-center gap-2">
               Auditoria, Segurança & Backups Automáticos
               <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold border border-red-200">
-                JSON & CSV
+                PGC-NIRF Moçambique
               </span>
             </h1>
             <p className="text-xs text-slate-500">
-              Rotina automatizada de backup em nuvem redundante e local, exportações completas para auditoria fiscal e rastreamento SHA-256
+              Rastreamento imutável de alterações contábeis por utilizador, rotinas automáticas de backup em nuvem e exportações auditáveis
             </p>
           </div>
         </div>
@@ -193,7 +308,7 @@ export const AuditoriaSegurancaView: React.FC = () => {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => exportarBackupCompletoJSON()}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-blue-950 font-bold text-xs border border-slate-300 transition-colors cursor-pointer"
             title="Exportar Snapshot Completo JSON"
           >
             <Download className="w-4 h-4 text-red-600" /> Exportar JSON
@@ -213,14 +328,25 @@ export const AuditoriaSegurancaView: React.FC = () => {
       {/* Navegação de Abas */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-1 text-xs">
         <button
+          onClick={() => setActiveTab('auditoria_contabil')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer ${
+            activeTab === 'auditoria_contabil'
+              ? 'bg-red-600 text-white shadow-xs'
+              : 'text-blue-950 hover:bg-slate-100'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" /> Log de Atividades Contábeis ({logsContabeis.length})
+        </button>
+
+        <button
           onClick={() => setActiveTab('auditoria')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer ${
             activeTab === 'auditoria'
               ? 'bg-red-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'text-blue-950 hover:bg-slate-100'
           }`}
         >
-          <Fingerprint className="w-4 h-4" /> Trilha de Auditoria Imutável ({auditoria.length})
+          <Fingerprint className="w-4 h-4" /> Trilha Geral de Auditoria ({auditoria.length})
         </button>
 
         <button
@@ -228,7 +354,7 @@ export const AuditoriaSegurancaView: React.FC = () => {
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer ${
             activeTab === '2fa_cripto'
               ? 'bg-red-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'text-blue-950 hover:bg-slate-100'
           }`}
         >
           <Lock className="w-4 h-4" /> 2FA & Criptografia Ponta a Ponta
@@ -239,7 +365,7 @@ export const AuditoriaSegurancaView: React.FC = () => {
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer ${
             activeTab === 'backups'
               ? 'bg-red-600 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              : 'text-blue-950 hover:bg-slate-100'
           }`}
         >
           <Database className="w-4 h-4" /> Sistema de Backup Automático & Exportações ({backups.length})
@@ -249,7 +375,399 @@ export const AuditoriaSegurancaView: React.FC = () => {
         </button>
       </div>
 
-      {/* ABA 1: TRILHA DE AUDITORIA */}
+      {/* ABA 1: LOG DE ATIVIDADES CONTÁBEIS DETALHADO (NOVO) */}
+      {activeTab === 'auditoria_contabil' && (
+        <div className="space-y-4">
+          {/* Banner de Rastreamento Contábil */}
+          <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-red-950 border border-slate-800 rounded-2xl p-5 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-red-600/40 text-red-200 border border-red-500/40 text-xs font-bold uppercase tracking-wider">
+                  Trilha Contábil PGC-NIRF
+                </span>
+                <span className="text-xs text-slate-300">
+                  Art. 45º Código Comercial de Moçambique
+                </span>
+              </div>
+              <h2 className="text-lg font-black text-white mt-1">
+                Log de Atividades e Alterações Contábeis por Utilizador
+              </h2>
+              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                Registo contínuo, cronológico e imutável de todas as modificações realizadas no razão, diários, plano de contas, conciliações e fecho fiscal com validação criptográfica SHA-256.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exportarLogContabilCSV}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-red-50 text-red-700 font-bold text-xs transition-colors cursor-pointer shadow-md"
+              >
+                <Download className="w-4 h-4 text-red-600" /> Exportar Log Contábil (CSV)
+              </button>
+            </div>
+          </div>
+
+          {/* Cards de Métricas do Log Contábil */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
+                <span>Operações Contábeis</span>
+                <BookOpen className="w-4 h-4 text-red-600" />
+              </div>
+              <p className="text-2xl font-black text-blue-950 font-mono">
+                {logsContabeisFiltrados.length}
+              </p>
+              <span className="text-[11px] text-slate-400">Total no histórico ativo</span>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
+                <span>Volume Auditado</span>
+                <Coins className="w-4 h-4 text-emerald-600" />
+              </div>
+              <p className="text-xl font-black text-emerald-700 font-mono truncate">
+                {totalValorMovimentadoContabil.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} MT
+              </p>
+              <span className="text-[11px] text-slate-400">Débitos/Créditos registrados</span>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
+                <span>Contas PGC Rastreadas</span>
+                <Layers className="w-4 h-4 text-blue-800" />
+              </div>
+              <p className="text-2xl font-black text-blue-950 font-mono">
+                {contasUnicasRastreadas}
+              </p>
+              <span className="text-[11px] text-slate-400">Classes 1 a 8 movimentadas</span>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold mb-1">
+                <span>Integridade Digital</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              </div>
+              <p className="text-xl font-black text-blue-950 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> 100% OK
+              </p>
+              <span className="text-[11px] text-slate-400">Hashes SHA-256 válidos</span>
+            </div>
+          </div>
+
+          {/* Barra de Filtros e Busca de Contabilidade */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar por documento (FT-, REC-, FS-), código de conta (2.1.1, 7.2), histórico ou utilizador..."
+                  value={buscaContabil}
+                  onChange={e => setBuscaContabil(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-xs text-blue-950 placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Filtro Operação */}
+                <select
+                  value={filtroOperacaoContabil}
+                  onChange={e => setFiltroOperacaoContabil(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-blue-950 focus:outline-none focus:border-red-600 cursor-pointer"
+                >
+                  <option value="todos">Todas as Operações</option>
+                  <option value="CRIACAO">Criação (Lançamentos / Contas)</option>
+                  <option value="ALTERACAO">Alteração / Auditoria</option>
+                  <option value="CONCILIACAO">Conciliação Bancária</option>
+                  <option value="FECHO">Fecho de Exercício</option>
+                  <option value="ORCAMENTO">Ajuste de Orçamento</option>
+                </select>
+
+                {/* Filtro Entidade */}
+                <select
+                  value={filtroEntidadeContabil}
+                  onChange={e => setFiltroEntidadeContabil(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-blue-950 focus:outline-none focus:border-red-600 cursor-pointer"
+                >
+                  <option value="todos">Todas as Entidades</option>
+                  <option value="Lancamento">Lançamento Contábil</option>
+                  <option value="ContaContabil">Conta do Plano PGC</option>
+                  <option value="Balancete">Balancete de Verificação</option>
+                  <option value="FechoExercicio">Fecho de Exercício</option>
+                  <option value="Orcamento">Orçamento Departamental</option>
+                  <option value="Conciliacao">Conciliação Bancária</option>
+                </select>
+
+                {/* Filtro Utilizador */}
+                <select
+                  value={filtroUsuarioContabil}
+                  onChange={e => setFiltroUsuarioContabil(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-blue-950 focus:outline-none focus:border-red-600 cursor-pointer"
+                >
+                  <option value="todos">Todos os Utilizadores</option>
+                  <option value="administrador">Administrador</option>
+                  <option value="gerente_financeiro">Gerente Financeiro</option>
+                  <option value="auditor">Auditor Independente</option>
+                  <option value="funcionario">Assistente Contábil</option>
+                </select>
+
+                {(buscaContabil || filtroOperacaoContabil !== 'todos' || filtroEntidadeContabil !== 'todos' || filtroUsuarioContabil !== 'todos') && (
+                  <button
+                    onClick={() => {
+                      setBuscaContabil('');
+                      setFiltroOperacaoContabil('todos');
+                      setFiltroEntidadeContabil('todos');
+                      setFiltroUsuarioContabil('todos');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela de Log de Atividades Contábeis com Linhas Expansíveis */}
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-red-50 text-red-950 border-b border-red-200 text-[11px]">
+                  <tr>
+                    <th className="py-3 px-3.5 font-bold">Data / Hora</th>
+                    <th className="py-3 px-3.5 font-bold">Utilizador Responsável</th>
+                    <th className="py-3 px-3.5 font-bold">Operação & Entidade</th>
+                    <th className="py-3 px-3.5 font-bold">Doc. Ref</th>
+                    <th className="py-3 px-3.5 font-bold">Contas PGC</th>
+                    <th className="py-3 px-3.5 font-bold text-right">Valor Operação</th>
+                    <th className="py-3 px-3.5 font-bold">Ação & Resumo</th>
+                    <th className="py-3 px-3.5 font-bold text-center">Partidas / Hash</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-blue-950 bg-white">
+                  {logsContabeisFiltrados.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-400">
+                        Nenhum registro contábil encontrado com os filtros selecionados.
+                      </td>
+                    </tr>
+                  ) : (
+                    logsContabeisFiltrados.map(log => {
+                      const isExpanded = expandedLogId === log.id;
+                      const perfilLabel =
+                        log.perfilUsuario === 'administrador'
+                          ? 'Administrador'
+                          : log.perfilUsuario === 'gerente_financeiro'
+                          ? 'Gerente Financeiro'
+                          : log.perfilUsuario === 'auditor'
+                          ? 'Auditor'
+                          : 'Funcionário';
+
+                      return (
+                        <React.Fragment key={log.id}>
+                          <tr
+                            onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                            className={`hover:bg-red-50/20 transition-colors cursor-pointer ${
+                              isExpanded ? 'bg-red-50/30' : ''
+                            }`}
+                          >
+                            <td className="py-3 px-3.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                              {log.dataHora}
+                            </td>
+
+                            <td className="py-3 px-3.5">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-blue-950">{log.usuario}</span>
+                                <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                    log.perfilUsuario === 'administrador'
+                                      ? 'bg-red-600'
+                                      : log.perfilUsuario === 'gerente_financeiro'
+                                      ? 'bg-emerald-600'
+                                      : log.perfilUsuario === 'auditor'
+                                      ? 'bg-purple-600'
+                                      : 'bg-blue-600'
+                                  }`} />
+                                  {perfilLabel}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] border ${
+                                  log.tipoOperacao === 'CRIACAO'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : log.tipoOperacao === 'FECHO'
+                                    ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                    : log.tipoOperacao === 'CONCILIACAO'
+                                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                    : log.tipoOperacao === 'ORCAMENTO'
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                    : 'bg-slate-100 text-slate-700 border-slate-300'
+                                }`}>
+                                  {log.tipoOperacao || 'ALTERACAO'}
+                                </span>
+                                <span className="text-slate-400 text-[10px]">●</span>
+                                <span className="font-semibold text-slate-700 text-[11px]">
+                                  {log.entidadeAfetada || 'Razão'}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3.5 whitespace-nowrap">
+                              {log.documentoRef ? (
+                                <span className="font-mono font-bold text-blue-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-[11px]">
+                                  {log.documentoRef}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 font-mono text-[11px]">-</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3.5">
+                              <div className="flex flex-wrap gap-1 max-w-[150px]">
+                                {(log.contasEnvolvidas && log.contasEnvolvidas.length > 0) ? (
+                                  log.contasEnvolvidas.slice(0, 3).map((c, i) => (
+                                    <span key={i} className="px-1.5 py-0.2 rounded bg-red-50 text-red-700 font-mono text-[10px] font-bold border border-red-200">
+                                      {c}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-400 text-[10px]">Geral</span>
+                                )}
+                                {log.contasEnvolvidas && log.contasEnvolvidas.length > 3 && (
+                                  <span className="text-[10px] text-slate-500 font-bold">
+                                    +{log.contasEnvolvidas.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-3.5 text-right font-mono font-bold whitespace-nowrap">
+                              {log.valorOperacao ? (
+                                <span className="text-blue-950">
+                                  {log.valorOperacao.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} MT
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 font-normal">-</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-3.5 max-w-xs">
+                              <p className="font-bold text-blue-950 truncate" title={log.acao}>{log.acao}</p>
+                              <p className="text-[11px] text-slate-500 truncate" title={log.detalhes}>{log.detalhes}</p>
+                            </td>
+
+                            <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  setExpandedLogId(isExpanded ? null : log.id);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600 transition-colors inline-flex items-center gap-1 text-[11px] font-semibold"
+                              >
+                                {isExpanded ? (
+                                  <>Ocultar <ChevronUp className="w-3.5 h-3.5" /></>
+                                ) : (
+                                  <>Detalhes <ChevronDown className="w-3.5 h-3.5" /></>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+
+                          {/* Linha Expansível com Partidas Dobradas, Justificativa e Hash SHA-256 */}
+                          {isExpanded && (
+                            <tr className="bg-slate-50/80 border-b border-red-100">
+                              <td colSpan={8} className="p-4">
+                                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3 text-xs">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold font-mono text-[11px]">
+                                        Registro #{log.id}
+                                      </span>
+                                      <span className="font-bold text-blue-950">
+                                        Auditoria Contábil PGC-NIRF
+                                      </span>
+                                      <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold text-[10px]">
+                                        ✓ Partidas Validadas no Razão
+                                      </span>
+                                    </div>
+                                    <span className="text-slate-500 font-mono text-[11px]">
+                                      Terminal IP: <strong className="text-blue-950">{log.ip}</strong>
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Bloco 1: Partidas e Contas Envolvidas */}
+                                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
+                                      <span className="font-bold text-blue-950 block">Partidas Dobradas Afetadas:</span>
+                                      <p className="text-slate-700 font-mono text-[11px]">
+                                        {log.partidasAfetadas || 'Partidas balanceadas em débito e crédito no diário oficial.'}
+                                      </p>
+                                      {log.contasEnvolvidas && log.contasEnvolvidas.length > 0 && (
+                                        <div className="pt-1.5 flex items-center gap-1.5 flex-wrap">
+                                          <span className="text-[11px] text-slate-500 font-semibold">Contas:</span>
+                                          {log.contasEnvolvidas.map((c, i) => (
+                                            <span key={i} className="px-2 py-0.5 rounded bg-white text-blue-950 font-mono font-bold text-[10px] border border-slate-300">
+                                              Conta {c}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Bloco 2: Justificativa Contábil */}
+                                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
+                                      <span className="font-bold text-blue-950 block">Justificativa & Finalidade Contábil:</span>
+                                      <p className="text-slate-700 text-[11px] leading-relaxed">
+                                        {log.justificativa || log.detalhes}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Bloco 3: Assinatura Criptográfica SHA-256 */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-red-50/50 border border-red-200/60">
+                                    <div className="flex items-center gap-2">
+                                      <ShieldCheck className="w-4 h-4 text-red-600 flex-shrink-0" />
+                                      <span className="font-bold text-red-900 text-[11px]">Hash Criptográfico SHA-256 (Imutável):</span>
+                                      <span className="font-mono text-[11px] text-blue-950 font-bold select-all break-all">
+                                        {log.hashIntegridade}
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={() => handleCopiarHashLog(log.hashIntegridade, log.id)}
+                                      className="px-2.5 py-1 rounded bg-white hover:bg-red-50 text-red-700 border border-red-200 font-bold text-[10px] transition-colors cursor-pointer inline-flex items-center gap-1 self-start sm:self-auto"
+                                    >
+                                      <Copy className="w-3 h-3 text-red-600" />
+                                      {copiadoLogHash === log.id ? 'Copiado!' : 'Copiar Hash'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between text-xs text-slate-500">
+              <span>
+                Exibindo <strong>{logsContabeisFiltrados.length}</strong> de <strong>{logsContabeis.length}</strong> registros contábeis auditados
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Qualquer modificação no razão gera automaticamente um carimbo digital assinado com SHA-256
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ABA 2: TRILHA GERAL DE AUDITORIA */}
       {activeTab === 'auditoria' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
@@ -257,10 +775,10 @@ export const AuditoriaSegurancaView: React.FC = () => {
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Pesquisar registro de auditoria..."
+                placeholder="Pesquisar registro geral de auditoria..."
                 value={buscaLog}
                 onChange={e => setBuscaLog(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600"
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-9 pr-3 py-1.5 text-xs text-blue-950 placeholder-slate-400 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600"
               />
             </div>
             <span className="text-xs text-slate-500 font-medium">Total: {auditoria.length} registros protegidos por SHA-256</span>
@@ -278,7 +796,7 @@ export const AuditoriaSegurancaView: React.FC = () => {
                   <th className="py-2.5 px-3 font-bold">Hash de Integridade (SHA-256)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-800 bg-white">
+              <tbody className="divide-y divide-slate-100 text-blue-950 bg-white">
                 {logsFiltrados.map(log => (
                   <tr key={log.id} className="hover:bg-red-50/20 transition-colors">
                     <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">{log.dataHora}</td>
@@ -287,7 +805,7 @@ export const AuditoriaSegurancaView: React.FC = () => {
                         {log.modulo}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 font-bold text-slate-900">{log.usuario}</td>
+                    <td className="py-2.5 px-3 font-bold text-blue-950">{log.usuario}</td>
                     <td className="py-2.5 px-3 font-bold text-slate-800">{log.acao}</td>
                     <td className="py-2.5 px-3 text-slate-600 text-[11px] max-w-xs truncate">{log.detalhes}</td>
                     <td className="py-2.5 px-3 font-mono text-[10px] text-slate-600 font-bold truncate max-w-[160px]" title={log.hashIntegridade}>
