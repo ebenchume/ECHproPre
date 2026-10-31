@@ -1,7 +1,8 @@
 {
-  "name": "ECHpro – Contabilidade e Gestão de RH",
+  "id": "/",
+  "name": "ECHpro – Contabilidade e Gestão de RH Integrada",
   "short_name": "ECHpro ERP",
-  "description": "Sistema Integrado de Contabilidade e Gestão de Recursos Humanos para Windows 10/11 e Web.",
+  "description": "Sistema Integrado de Contabilidade e Gestão de Recursos Humanos para Windows 10/11 e Web com suporte Offline-First.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -13,7 +14,7 @@
       "src": "/vite.svg",
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

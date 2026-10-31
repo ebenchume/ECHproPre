@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Bell,
@@ -20,6 +20,8 @@ import {
   User,
   Sun,
   Moon,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -55,6 +57,21 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [showNotifications, setShowNotifications] = useState(false);
   const unreadCount = notificacoes.filter(n => !n.lida).length;
+
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const solicitarPushNotification = () => {
     if ('Notification' in window) {
@@ -116,6 +133,32 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="ml-1 px-1.5 py-0.5 rounded bg-white text-red-700 font-bold font-mono text-[10px] shadow-xs">
               {empresa.moeda}
             </span>
+          </div>
+
+          {/* Status de Conectividade & Suporte Offline-First */}
+          <div
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-default ${
+              isOnline
+                ? 'bg-red-800/90 border-red-600/80 text-emerald-300'
+                : 'bg-amber-400 text-slate-950 border-amber-300 animate-pulse shadow-md'
+            }`}
+            title={
+              isOnline
+                ? 'Sistema Conectado (Service Worker Ativo - Cache Offline Pré-carregado)'
+                : 'Modo Offline Ativo - Você pode continuar lançando faturas, processando folha e emitindo relatórios normalmente sem internet!'
+            }
+          >
+            {isOnline ? (
+              <>
+                <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-[11px] hidden xl:inline text-white">Online</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-slate-950" />
+                <span className="text-[11px] font-black">Modo Offline</span>
+              </>
+            )}
           </div>
 
           {/* Direita: Instalador Windows, Chave Ativação, Segurança 2FA, Notificações */}

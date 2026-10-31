@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -28,6 +28,7 @@ import {
   Headphones,
   UserCheck,
   ShieldAlert,
+  WifiOff,
 } from 'lucide-react';
 
 function AppContent() {
@@ -39,6 +40,21 @@ function AppContent() {
   const [isWindowsModalOpen, setIsWindowsModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isNovoLancamentoOpen, setIsNovoLancamentoOpen] = useState(false);
+
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-blue-950 dark:text-slate-100 flex flex-col font-sans selection:bg-red-600 selection:text-white transition-colors duration-200">
@@ -175,6 +191,14 @@ function AppContent() {
         onClose={() => setIsLoginModalOpen(false)}
         isBloqueado={!estaAutenticado}
       />
+
+      {/* Indicador Flutuante de Modo Offline */}
+      {!isOnline && (
+        <div className="fixed bottom-14 lg:bottom-4 left-4 z-50 flex items-center gap-2.5 rounded-xl bg-amber-500 text-slate-950 px-3.5 py-2 text-xs font-bold shadow-2xl border border-amber-300 animate-pulse">
+          <WifiOff className="w-4 h-4 text-slate-950 flex-shrink-0" />
+          <span>Modo Offline Ativo — Operando localmente sem internet. Todos os lançamentos e dados de contabilidade/RH estão seguros no dispositivo.</span>
+        </div>
+      )}
     </div>
   );
 }
