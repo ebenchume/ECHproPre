@@ -187,6 +187,10 @@ export interface AppContextType {
   validarChaveAtivacao: (chave: string) => { valida: boolean; mensagem: string; tipo?: string };
   ativarSistema: (chave: string, titular?: string, email?: string) => { sucesso: boolean; mensagem: string };
   gerarChaveLicencaOficial: (titular: string, email: string) => string;
+
+  // Tema Visual (Light / Dark Mode para trabalhos noturnos)
+  tema: 'light' | 'dark';
+  alternarTema: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -301,6 +305,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(`${STORAGE_KEY}_autenticado`);
     return saved !== null ? JSON.parse(saved) : true;
   });
+
+  const [tema, setTema] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY}_tema`);
+    if (saved === 'dark' || saved === 'light') return saved;
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  });
+
+  useEffect(() => {
+    try {
+      if (tema === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      localStorage.setItem(`${STORAGE_KEY}_tema`, tema);
+    } catch (e) {}
+  }, [tema]);
+
+  const alternarTema = () => {
+    setTema(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   // Salvar no localStorage quando o estado mudar
   useEffect(() => {
@@ -1912,6 +1940,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         validarChaveAtivacao,
         ativarSistema,
         gerarChaveLicencaOficial,
+        tema,
+        alternarTema,
       }}
     >
       {children}

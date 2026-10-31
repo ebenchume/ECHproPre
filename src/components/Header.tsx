@@ -18,6 +18,8 @@ import {
   ChevronDown,
   LogOut,
   User,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -47,6 +49,8 @@ export const Header: React.FC<HeaderProps> = ({
     terminarSessao,
     licenca,
     configBackupAuto,
+    tema,
+    alternarTema,
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -165,6 +169,30 @@ export const Header: React.FC<HeaderProps> = ({
               <Database className="w-3.5 h-3.5 text-red-200" />
               <span>Backup Auto</span>
               <span className={`w-2 h-2 rounded-full ${configBackupAuto.ativo ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            </button>
+
+            {/* Alternador de Tema (Light / Dark Mode para Conforto Contábil Noturno) */}
+            <button
+              onClick={alternarTema}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-red-800/80 hover:bg-red-800 text-white border border-red-600/80 shadow-xs cursor-pointer group"
+              title={
+                tema === 'dark'
+                  ? 'Modo Noturno Ativo - Clique para alternar para Modo Diurno'
+                  : 'Modo Diurno Ativo - Clique para ativar Modo Noturno (Conforto Contábil Noturno)'
+              }
+              aria-label="Alternar Tema (Modo Noturno / Diurno)"
+            >
+              {tema === 'dark' ? (
+                <>
+                  <Sun className="w-4 h-4 text-amber-300 group-hover:rotate-45 transition-transform" />
+                  <span className="hidden md:inline text-amber-200">Claro</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4 text-red-200 group-hover:-rotate-12 transition-transform" />
+                  <span className="hidden md:inline text-red-100">Noturno</span>
+                </>
+              )}
             </button>
 
             {/* Sino de Notificações */}

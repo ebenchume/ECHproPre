@@ -41,7 +41,7 @@ function AppContent() {
   const [isNovoLancamentoOpen, setIsNovoLancamentoOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-blue-950 flex flex-col font-sans selection:bg-red-600 selection:text-white">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-blue-950 dark:text-slate-100 flex flex-col font-sans selection:bg-red-600 selection:text-white transition-colors duration-200">
       {/* Header Fixo no Topo */}
       <Header
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
